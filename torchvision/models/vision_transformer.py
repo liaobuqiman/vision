@@ -12,7 +12,7 @@ from ..utils import _log_api_usage_once
 from ._api import register_model, Weights, WeightsEnum
 from ._meta import _IMAGENET_CATEGORIES
 from ._utils import _ovewrite_named_param, handle_legacy_interface
-
+from roast.FakeRoast import *
 
 __all__ = [
     "VisionTransformer",
@@ -46,7 +46,7 @@ class MLPBlock(MLP):
         super().__init__(in_dim, [mlp_dim, in_dim], activation_layer=nn.GELU, inplace=None, dropout=dropout)
 
         for m in self.modules():
-            if isinstance(m, nn.Linear):
+            if isinstance(m, FakeRoastLinear): #nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:
                     nn.init.normal_(m.bias, std=1e-6)
@@ -206,13 +206,15 @@ class VisionTransformer(nn.Module):
                 )
                 prev_channels = conv_stem_layer_config.out_channels
             seq_proj.add_module(
-                "conv_last", nn.Conv2d(in_channels=prev_channels, out_channels=hidden_dim, kernel_size=1)
+                "conv_last", FakeRoastConv2d()
+                #nn.Conv2d(in_channels=prev_channels, out_channels=hidden_dim, kernel_size=1)
             )
             self.conv_proj: nn.Module = seq_proj
         else:
-            self.conv_proj = nn.Conv2d(
-                in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size
-            )
+            self.conv_proj = FakeRoastConv2d()
+                #nn.Conv2d(
+                    #in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size"""
+            #)
 
         seq_length = (image_size // patch_size) ** 2
 
@@ -234,21 +236,24 @@ class VisionTransformer(nn.Module):
 
         heads_layers: OrderedDict[str, nn.Module] = OrderedDict()
         if representation_size is None:
-            heads_layers["head"] = nn.Linear(hidden_dim, num_classes)
+            heads_layers["head"] = FakeRoastLinear()
+            #nn.Linear(hidden_dim, num_classes)
         else:
-            heads_layers["pre_logits"] = nn.Linear(hidden_dim, representation_size)
+            heads_layers["pre_logits"] = FakeRoastLinear()
+            #nn.Linear(hidden_dim, representation_size)
             heads_layers["act"] = nn.Tanh()
-            heads_layers["head"] = nn.Linear(representation_size, num_classes)
+            heads_layers["head"] = FakeRoastLinear()
+            #nn.Linear(representation_size, num_classes)
 
         self.heads = nn.Sequential(heads_layers)
 
-        if isinstance(self.conv_proj, nn.Conv2d):
+        if isinstance(self.conv_proj, FakeRoastConv2d ):#nn.Conv2d):
             # Init the patchify stem
             fan_in = self.conv_proj.in_channels * self.conv_proj.kernel_size[0] * self.conv_proj.kernel_size[1]
             nn.init.trunc_normal_(self.conv_proj.weight, std=math.sqrt(1 / fan_in))
             if self.conv_proj.bias is not None:
                 nn.init.zeros_(self.conv_proj.bias)
-        elif self.conv_proj.conv_last is not None and isinstance(self.conv_proj.conv_last, nn.Conv2d):
+        elif self.conv_proj.conv_last is not None and isinstance(self.conv_proj.conv_last, FakeRoastConv2d): #faknn.Conv2d):
             # Init the last 1x1 conv of the conv stem
             nn.init.normal_(
                 self.conv_proj.conv_last.weight, mean=0.0, std=math.sqrt(2.0 / self.conv_proj.conv_last.out_channels)
@@ -256,12 +261,12 @@ class VisionTransformer(nn.Module):
             if self.conv_proj.conv_last.bias is not None:
                 nn.init.zeros_(self.conv_proj.conv_last.bias)
 
-        if hasattr(self.heads, "pre_logits") and isinstance(self.heads.pre_logits, nn.Linear):
+        if hasattr(self.heads, "pre_logits") and isinstance(self.heads.pre_logits, FakeRoastLinear):#nn.Linear):
             fan_in = self.heads.pre_logits.in_features
             nn.init.trunc_normal_(self.heads.pre_logits.weight, std=math.sqrt(1 / fan_in))
             nn.init.zeros_(self.heads.pre_logits.bias)
 
-        if isinstance(self.heads.head, nn.Linear):
+        if isinstance(self.heads.head, FakeRoastLinear): #nn.Linear):
             nn.init.zeros_(self.heads.head.weight)
             nn.init.zeros_(self.heads.head.bias)
 
